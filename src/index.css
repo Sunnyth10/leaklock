@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --color-background: #07151b;
+  --color-foreground: #e2e8f0;
+  --color-card: #0d2027;
+  --color-card-foreground: #e2e8f0;
+  --color-primary: #79e6c0;
+  --color-primary-foreground: #07151b;
+  --color-secondary: #102b32;
+  --color-secondary-foreground: #94a3b8;
+  --color-muted: #17353d;
+  --color-muted-foreground: #64748b;
+  --color-accent: #ff8066;
+  --color-accent-foreground: #ffffff;
+  --color-border: #1c3b42;
+  --color-ring: #79e6c0;
+  --radius: 4px;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-sans: 'Manrope', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background:
+    radial-gradient(circle at 88% 4%, rgba(121, 230, 192, 0.08), transparent 26rem),
+    linear-gradient(rgba(121, 230, 192, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(121, 230, 192, 0.025) 1px, transparent 1px),
+    #07151b;
+  background-size: auto, 32px 32px, 32px 32px, auto;
+  background-attachment: fixed;
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(121, 230, 192, 0.3);
+  color: #f4fffb;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e2035;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a2a4a;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+@keyframes pulse-ring {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.blink {
+  animation: blink 1.2s step-end infinite;
+}
+
+.live-dot::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff3b5c;
+  margin-right: 6px;
+  animation: pulse-ring 1.5s ease-out infinite;
+  position: relative;
+}

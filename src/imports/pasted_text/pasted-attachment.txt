@@ -1,0 +1,306 @@
+CRITICAL PRODUCT DIFFERENTIATION
+
+Do NOT position this as a generic regex secret scanner.
+
+The product architecture must follow:
+
+DETECT → PROVE → TRACE → FIX
+
+These four stages are the core differentiator.
+
+==================================================
+STAGE 1 — DETECT
+==================================================
+
+Detect suspicious credentials using:
+
+- regex/pattern matching
+- known credential formats
+- Shannon entropy
+- string length
+- character diversity
+- variable names
+- file path
+- file type
+- surrounding code context
+- production/development/test indicators
+- example/placeholder indicators
+
+Create a unified:
+
+SIGNAL SCORE: 0–100
+
+The score represents how strongly the evidence indicates that a candidate is a real secret.
+
+Example:
+
+Pattern match          +25
+Known credential       +30
+High entropy           +20
+Production context     +15
+Sensitive filename     +10
+
+Subtract points for:
+
+example
+sample
+dummy
+placeholder
+test
+changeme
+
+Show the evidence behind the score.
+
+==================================================
+STAGE 2 — PROVE
+==================================================
+
+Do NOT attempt external verification for every candidate.
+
+Only high-confidence/high-score candidates should be eligible for verification.
+
+Implement a provider-verification abstraction:
+
+Verifier
+├── GitHub verifier
+├── AWS verifier
+└── Generic/unknown verifier
+
+For the hackathon MVP, it is acceptable to implement only one or two provider-specific verifiers.
+
+Verification results:
+
+LIVE
+INVALID
+UNKNOWN
+NOT_SUPPORTED
+
+Never claim a credential is live unless the provider check actually succeeds.
+
+Never expose the raw credential in the dashboard.
+
+If no provider verifier exists:
+
+Verification: UNKNOWN
+
+The scanner must continue working without external API access.
+
+The architecture must support adding more providers later.
+
+IMPORTANT:
+Verification must be opt-in/controlled and must only run on high-confidence candidates.
+
+==================================================
+STAGE 3 — TRACE
+==================================================
+
+For a confirmed or high-confidence candidate, determine its blast radius.
+
+Search:
+
+1. Current repository files
+2. Staged files
+3. Git history
+4. Deleted/previous versions where practical
+
+Determine:
+
+- number of current files containing the credential
+- number of historical commits containing it
+- affected paths
+- first detected commit
+- most recent occurrence
+- affected branches if practical
+
+Example:
+
+BLAST RADIUS
+
+Current files: 3
+Historical commits: 8
+Affected paths: 4
+
+Current occurrences:
+config/prod.env
+backend/config.py
+deployment/secrets.yaml
+
+Historical exposure:
+8 commits
+
+IMPORTANT:
+The raw credential must never be stored.
+
+For repository searching, the candidate may be processed temporarily in memory and immediately discarded.
+
+Only store:
+
+- fingerprint
+- occurrence count
+- paths
+- commits
+- timestamps
+- metadata
+
+==================================================
+STAGE 4 — FIX
+==================================================
+
+The product must move beyond detection into remediation.
+
+For supported source-code patterns, provide an actionable remediation workflow.
+
+Example:
+
+BEFORE:
+
+API_KEY = "FAKE_DEMO_KEY"
+
+AFTER:
+
+import os
+API_KEY = os.getenv("API_KEY")
+
+Also provide:
+
+- .env.example generation
+- .gitignore suggestion
+- credential rotation recommendation
+- provider console link where supported
+- rescan after remediation
+
+Do NOT blindly rewrite arbitrary code.
+
+For unsupported cases, provide a safe manual remediation instruction instead.
+
+==================================================
+REMEDIATION WORKFLOW
+==================================================
+
+Finding
+ ↓
+View Evidence
+ ↓
+View Blast Radius
+ ↓
+Choose Fix
+ ↓
+Apply Safe Fix
+ ↓
+Generate .env.example
+ ↓
+Suggest .gitignore
+ ↓
+Recommend Rotation
+ ↓
+Rescan
+ ↓
+Resolved
+
+==================================================
+FINDING STATES
+==================================================
+
+Use:
+
+DETECTED
+VERIFICATION_PENDING
+LIVE
+INVALID
+UNKNOWN
+BLOCKED
+REMEDIATION_AVAILABLE
+REMEDIATED
+RESOLVED
+
+Not every finding needs every state.
+
+==================================================
+DASHBOARD DIFFERENTIATOR
+==================================================
+
+The main dashboard should not merely show:
+
+"37 secrets detected."
+
+Instead show:
+
+SECRETS AT RISK
+CONFIRMED LIVE
+BLOCKED COMMITS
+OPEN EXPOSURES
+REMEDIATED
+COMPLIANCE
+
+Add a prominent:
+
+BLAST RADIUS
+
+section.
+
+Example:
+
+┌────────────────────────────────────────┐
+│ CRITICAL EXPOSURE                     │
+│ GitHub Token                           │
+│                                        │
+│ Signal Score       96/100             │
+│ Verification       LIVE               │
+│ Current Files      3                  │
+│ Historical Commits 8                  │
+│                                        │
+│ 🔴 Immediate rotation recommended     │
+└────────────────────────────────────────┘
+
+==================================================
+IMPORTANT DEMO REQUIREMENT
+==================================================
+
+Create a safe fake credential demo.
+
+Do NOT use a real API credential.
+
+The demo should simulate the complete lifecycle:
+
+DETECT
+ ↓
+HIGH SIGNAL SCORE
+ ↓
+PROVE
+ ↓
+LIVE/VERIFIED or safe demo verification result
+ ↓
+TRACE
+ ↓
+BLAST RADIUS
+ ↓
+FIX
+ ↓
+RESCAN
+ ↓
+RESOLVED
+
+If live provider verification cannot safely be demonstrated without credentials,
+show the architecture and use UNKNOWN rather than faking LIVE status.
+
+Never fabricate security verification results.
+
+==================================================
+TIME CONSTRAINT
+==================================================
+
+This is a 2-hour hackathon prototype.
+
+Prioritize:
+
+1. Detect
+2. Block
+3. Signal Score
+4. Dashboard
+5. Trace
+6. Remediation
+7. Provider verification
+
+If time is insufficient, provider verification must NOT prevent the scanner and pre-commit hook from working.
+
+The project must still be fully demoable without external APIs.
