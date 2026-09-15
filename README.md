@@ -1,7 +1,6 @@
 🛡️ LeakLock: Stop Secrets Before They Leak
 Hardcoded secrets are a leading cause of massive data breaches. LeakLock is a developer-first security tool that detects exposed API keys, database credentials, and tokens in your local repositories before they are accidentally committed to version control.
 
-[Screenshot Placeholder] ![LeakLock Dashboard](./demo-assets/dashboard-screenshot.png)
 
 ⚡ Core Features & Tech Stack
 LeakLock transforms raw security data into actionable, developer-friendly insights:
