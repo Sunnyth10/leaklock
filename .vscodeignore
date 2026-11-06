@@ -1,0 +1,13 @@
+.vscode/**
+.git/**
+node_modules/**
+src/**
+*.map
+pnpm-lock.yaml
+package-lock.json
+tsconfig.json
+vite.config.ts
+index.html
+AGENTS.md
+CLAUDE.md
+

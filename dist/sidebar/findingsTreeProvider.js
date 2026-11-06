@@ -1,0 +1,170 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OverviewTreeProvider = exports.FindingsTreeProvider = void 0;
+const vscode = __importStar(require("vscode"));
+class FindingsTreeProvider {
+    _onDidChangeTreeData = new vscode.EventEmitter();
+    onDidChangeTreeData = this._onDidChangeTreeData.event;
+    findings = [];
+    updateFindings(findings) {
+        this.findings = findings;
+        this._onDidChangeTreeData.fire();
+    }
+    getTreeItem(element) {
+        return element;
+    }
+    getChildren(element) {
+        if (!element) {
+            if (this.findings.length === 0) {
+                const cleanItem = new TreeItem('No Leaks Detected (Safe)', vscode.TreeItemCollapsibleState.None);
+                cleanItem.iconPath = new vscode.ThemeIcon('shield-check', new vscode.ThemeColor('testing.iconPassed'));
+                cleanItem.description = 'Workspace is clean';
+                return Promise.resolve([cleanItem]);
+            }
+            // Group by risk levels
+            const riskOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+            const categories = [];
+            for (const risk of riskOrder) {
+                const count = this.findings.filter((f) => f.risk === risk).length;
+                if (count > 0) {
+                    const catItem = new TreeItem(`${risk} Risk (${count})`, vscode.TreeItemCollapsibleState.Expanded, risk);
+                    if (risk === 'CRITICAL') {
+                        catItem.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'));
+                    }
+                    else if (risk === 'HIGH') {
+                        catItem.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('editorWarning.foreground'));
+                    }
+                    else if (risk === 'MEDIUM') {
+                        catItem.iconPath = new vscode.ThemeIcon('info', new vscode.ThemeColor('editorInfo.foreground'));
+                    }
+                    else {
+                        catItem.iconPath = new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
+                    }
+                    categories.push(catItem);
+                }
+            }
+            return Promise.resolve(categories);
+        }
+        if (element.contextValue) {
+            // Risk category node - return child findings
+            const risk = element.contextValue;
+            const matching = this.findings.filter((f) => f.risk === risk);
+            const items = matching.map((f) => {
+                const item = new TreeItem(`${f.type}`, vscode.TreeItemCollapsibleState.None);
+                item.description = `${f.file}:${f.line}`;
+                item.tooltip = new vscode.MarkdownString(`**${f.type}** (${f.provider})\n\n` +
+                    `- **Risk:** ${f.risk}\n` +
+                    `- **Confidence:** ${f.confidence}%\n` +
+                    `- **Entropy:** ${f.entropy} bits/char\n` +
+                    `- **Secret:** \`${f.redactedSecret}\`\n\n` +
+                    `*${f.remediation}*`);
+                item.iconPath = new vscode.ThemeIcon('key');
+                // Clicking jumps directly to the file & line!
+                item.command = {
+                    command: 'vscode.open',
+                    title: 'Jump to Secret',
+                    arguments: [
+                        vscode.Uri.file(f.fullPath),
+                        {
+                            selection: new vscode.Range(f.line - 1, f.column - 1, f.line - 1, f.column - 1 + f.length),
+                        },
+                    ],
+                };
+                return item;
+            });
+            return Promise.resolve(items);
+        }
+        return Promise.resolve([]);
+    }
+}
+exports.FindingsTreeProvider = FindingsTreeProvider;
+class OverviewTreeProvider {
+    _onDidChangeTreeData = new vscode.EventEmitter();
+    onDidChangeTreeData = this._onDidChangeTreeData.event;
+    findingsCount = 0;
+    isGit = true;
+    update(count, isGit) {
+        this.findingsCount = count;
+        this.isGit = isGit;
+        this._onDidChangeTreeData.fire();
+    }
+    getTreeItem(element) {
+        return element;
+    }
+    getChildren() {
+        const items = [];
+        const statusItem = new TreeItem(this.findingsCount === 0 ? 'Status: Protected' : `Status: ${this.findingsCount} Leaks Active`, vscode.TreeItemCollapsibleState.None);
+        statusItem.iconPath = new vscode.ThemeIcon(this.findingsCount === 0 ? 'check' : 'alert', this.findingsCount === 0 ? new vscode.ThemeColor('testing.iconPassed') : new vscode.ThemeColor('errorForeground'));
+        items.push(statusItem);
+        const scanWorkspaceItem = new TreeItem('Run Full Workspace Scan', vscode.TreeItemCollapsibleState.None);
+        scanWorkspaceItem.iconPath = new vscode.ThemeIcon('search');
+        scanWorkspaceItem.command = {
+            command: 'secret-leak-detector.scanWorkspace',
+            title: 'Scan Workspace',
+        };
+        items.push(scanWorkspaceItem);
+        const scanStagedItem = new TreeItem('Check Git Staged Changes', vscode.TreeItemCollapsibleState.None);
+        scanStagedItem.iconPath = new vscode.ThemeIcon('git-commit');
+        scanStagedItem.command = {
+            command: 'secret-leak-detector.scanStaged',
+            title: 'Scan Staged Changes',
+        };
+        items.push(scanStagedItem);
+        const dashboardItem = new TreeItem('Open Interactive Dashboard', vscode.TreeItemCollapsibleState.None);
+        dashboardItem.iconPath = new vscode.ThemeIcon('dashboard');
+        dashboardItem.command = {
+            command: 'secret-leak-detector.openDashboard',
+            title: 'Open Dashboard',
+        };
+        items.push(dashboardItem);
+        const hookItem = new TreeItem('Install Pre-Commit Hook', vscode.TreeItemCollapsibleState.None);
+        hookItem.iconPath = new vscode.ThemeIcon('terminal');
+        hookItem.command = {
+            command: 'secret-leak-detector.installGitHook',
+            title: 'Install Hook',
+        };
+        items.push(hookItem);
+        return Promise.resolve(items);
+    }
+}
+exports.OverviewTreeProvider = OverviewTreeProvider;
+class TreeItem extends vscode.TreeItem {
+    constructor(label, collapsibleState, contextValue) {
+        super(label, collapsibleState);
+        this.contextValue = contextValue;
+    }
+}
+//# sourceMappingURL=findingsTreeProvider.js.map

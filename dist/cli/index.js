@@ -1,0 +1,459 @@
+#!/usr/bin/env node
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
+const scanner_1 = require("../core/scanner/scanner");
+const gitHistoryEngine_1 = require("../core/history/gitHistoryEngine");
+const gitTimeline_1 = require("../core/history/gitTimeline");
+const baselineEngine_1 = require("../core/baseline/baselineEngine");
+const remediationEngine_1 = require("../core/remediation/remediationEngine");
+const redactor_1 = require("../core/redactor/redactor");
+const sarifFormatter_1 = require("../core/sarif/sarifFormatter");
+const args = process.argv.slice(2);
+const command = args[0] || 'help';
+async function main() {
+    const cwd = process.cwd();
+    switch (command) {
+        case 'scan':
+            await runScan(args.slice(1), cwd);
+            break;
+        case 'history':
+            await runHistory(args.slice(1), cwd);
+            break;
+        case 'trace':
+            await runTrace(args.slice(1), cwd);
+            break;
+        case 'timeline':
+            await runTimeline(args.slice(1), cwd);
+            break;
+        case 'baseline':
+            await runBaseline(args.slice(1), cwd);
+            break;
+        case 'fix':
+            await runFix(args.slice(1), cwd);
+            break;
+        case 'verify':
+            await runVerify(args.slice(1), cwd);
+            break;
+        case 'hook':
+            await runHook(args.slice(1), cwd);
+            break;
+        case 'help':
+        default:
+            printHelp();
+            break;
+    }
+}
+function printHelp() {
+    console.log(`
+🔐 Secret Leak Detector CLI — Context-Aware Secret Protection & History Analysis
+
+Usage:
+  secret-leak-detector <command> [options]
+
+Commands:
+  scan [target]          Scan working tree or file for exposed credentials
+                         Options:
+                           --json             Output findings in JSON format
+                           --sarif            Output findings in SARIF v2.1.0 (for CI/CD)
+                           --baseline <file>  Evaluate against baseline (pass on known secrets)
+                           --staged           Scan only Git staged changes (pre-commit check)
+                           --fail-on <tier>   Exit code 1 on tier: CRITICAL (default), HIGH, MEDIUM
+
+  history                Scan Git commit history for previously introduced credentials
+                         Options:
+                           --max <n>          Number of commits to inspect (default: 100)
+
+  trace <secret>         Trace a credential's commit provenance, duration, and blast radius
+
+  baseline init          Generate or update .secretleak-baseline.json with existing findings
+
+  fix <file>             Controlled interactive remediation (diff preview & .env migration)
+                         Options:
+                           --dry-run          Preview patch without modifying files
+
+  verify <file>          Rescan and verify that credential exposure has been eliminated
+
+  hook install           Install standalone pre-commit hook in .git/hooks/pre-commit
+
+Examples:
+  npx secret-leak-detector scan . --sarif > results.sarif
+  npx secret-leak-detector scan --staged
+  npx secret-leak-detector history --max 50
+  npx secret-leak-detector baseline init
+`);
+}
+async function runScan(cmdArgs, cwd) {
+    const isJson = cmdArgs.includes('--json');
+    const isSarif = cmdArgs.includes('--sarif');
+    const isStaged = cmdArgs.includes('--staged');
+    const baselineIdx = cmdArgs.indexOf('--baseline');
+    const baselineFile = baselineIdx !== -1 ? cmdArgs[baselineIdx + 1] : undefined;
+    const failOnIdx = cmdArgs.indexOf('--fail-on');
+    const failOn = (failOnIdx !== -1 ? cmdArgs[failOnIdx + 1]?.toUpperCase() : 'CRITICAL');
+    let targetPath = cmdArgs.find((a) => !a.startsWith('--') && a !== baselineFile && a !== failOn) || '.';
+    const absPath = path.resolve(cwd, targetPath);
+    const startTime = Date.now();
+    let findings = [];
+    let filesScanned = 0;
+    if (isStaged) {
+        const gitEngine = new gitHistoryEngine_1.GitHistoryEngine(cwd);
+        const isGit = await gitEngine.isGitRepo();
+        if (!isGit) {
+            console.error('Error: Not a Git repository.');
+            process.exit(1);
+        }
+        // Scan staged diff
+        const { execSync } = require('child_process');
+        try {
+            const stdout = execSync('git diff --cached --unified=0', { cwd, encoding: 'utf8' });
+            if (stdout.trim()) {
+                const fileDiffs = stdout.split(/^diff --git /m);
+                for (const diff of fileDiffs) {
+                    if (!diff.trim())
+                        continue;
+                    const match = diff.match(/^[ab]\/(.+?) [ab]\/(.+)/m) || diff.match(/^\+\+\+ b\/(.+)/m);
+                    const fname = match ? match[1] : 'staged-file';
+                    const addedLines = diff
+                        .split('\n')
+                        .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+                        .map((l) => l.substring(1))
+                        .join('\n');
+                    if (addedLines.trim()) {
+                        findings.push(...(0, scanner_1.scanContent)(addedLines, fname, { workspaceRoot: cwd }));
+                        filesScanned++;
+                    }
+                }
+            }
+        }
+        catch (e) {
+            console.error(`Git diff failed: ${e.message}`);
+            process.exit(1);
+        }
+    }
+    else {
+        // Scan directory or single file
+        const filesToScan = [];
+        collectFiles(absPath, filesToScan, cwd);
+        filesScanned = filesToScan.length;
+        for (const file of filesToScan) {
+            findings.push(...(0, scanner_1.scanFile)(file, { workspaceRoot: cwd }));
+        }
+    }
+    // Baseline filtering if enabled
+    let baselineStats;
+    if (baselineFile || fs.existsSync(path.join(cwd, baselineEngine_1.DEFAULT_BASELINE_FILENAME))) {
+        const baselineEngine = new baselineEngine_1.BaselineEngine(cwd, baselineFile || baselineEngine_1.DEFAULT_BASELINE_FILENAME);
+        if (baselineEngine.exists()) {
+            const filtered = baselineEngine.filterAgainstBaseline(findings);
+            baselineStats = {
+                total: findings.length,
+                existing: filtered.existingFindings.length,
+                newFindings: filtered.newFindings.length,
+                resolved: filtered.resolvedCount,
+            };
+            // Only report new findings for blocking
+            findings = filtered.newFindings;
+        }
+    }
+    const durationMs = Date.now() - startTime;
+    const scanResult = (0, scanner_1.buildScanResult)(findings, filesScanned, durationMs);
+    if (baselineStats)
+        scanResult.baselineStats = baselineStats;
+    if (isSarif) {
+        console.log(JSON.stringify((0, sarifFormatter_1.formatAsSarif)(findings), null, 2));
+        processExitCheck(findings, failOn);
+        return;
+    }
+    if (isJson) {
+        console.log(JSON.stringify(scanResult, null, 2));
+        processExitCheck(findings, failOn);
+        return;
+    }
+    // Human-Readable Colored Output
+    console.log('\n============================================================');
+    console.log('🔍 SECRET LEAK DETECTOR SCAN RESULTS');
+    console.log('============================================================');
+    console.log(`Files Scanned:    ${filesScanned}`);
+    console.log(`Duration:         ${durationMs}ms`);
+    console.log(`Active Leaks:     ${findings.length}`);
+    if (baselineStats) {
+        console.log(`Baseline Active:  ${baselineStats.existing} known finding(s) ignored`);
+        console.log(`New Exposures:    ${baselineStats.newFindings}`);
+        console.log(`Resolved:         ${baselineStats.resolved}`);
+    }
+    if (findings.length === 0) {
+        console.log('\n✅ ALL CLEAN! No secrets or credentials detected.');
+        console.log('============================================================\n');
+        process.exit(0);
+    }
+    console.log('\n🚨 DETECTED CREDENTIAL FINDINGS:\n');
+    findings.forEach((f, idx) => {
+        console.log(`------------------------------------------------------------`);
+        console.log(`Finding #${idx + 1}: ${f.type} (${f.provider})`);
+        console.log(`File:        ${f.file}:${f.line}:${f.column}`);
+        console.log(`Secret:      ${f.redactedSecret}`);
+        console.log(`Confidence:  ${f.confidence}%`);
+        console.log(`Risk Score:  ${f.riskAssessment.score}/100 [${f.risk}]`);
+        console.log(`Blast Radius: ${f.riskAssessment.blastRadius.level} (${f.riskAssessment.blastRadius.summary})`);
+        console.log(`\nEvidence:`);
+        f.evidence.items.forEach((item) => {
+            console.log(`  • [${item.confidenceImpact >= 0 ? '+' : ''}${item.confidenceImpact}] ${item.description}`);
+        });
+        console.log(`\nSuggested Fix:`);
+        console.log(`  ${f.remediation.replacementCode}`);
+        console.log(`  Add to .env: ${f.remediation.envFileSnippet}`);
+    });
+    console.log('============================================================\n');
+    processExitCheck(findings, failOn);
+}
+function processExitCheck(findings, failOn) {
+    const riskLevels = {
+        CRITICAL: 4,
+        HIGH: 3,
+        MEDIUM: 2,
+        LOW: 1,
+    };
+    const threshold = riskLevels[failOn] || 4;
+    const shouldFail = findings.some((f) => (riskLevels[f.risk] || 0) >= threshold);
+    if (shouldFail) {
+        process.exit(1);
+    }
+    else {
+        process.exit(0);
+    }
+}
+async function runHistory(cmdArgs, cwd) {
+    const maxIdx = cmdArgs.indexOf('--max');
+    const maxCommits = maxIdx !== -1 ? parseInt(cmdArgs[maxIdx + 1], 10) : 100;
+    console.log(`\n⏳ Scanning Git commit history (last ${maxCommits} commits) for historical leaks...`);
+    const historyEngine = new gitHistoryEngine_1.GitHistoryEngine(cwd);
+    const findings = await historyEngine.scanHistoryCommits(maxCommits);
+    if (findings.length === 0) {
+        console.log('✅ No historical secret exposures detected in inspected commits.');
+        process.exit(0);
+    }
+    console.log(`\n⚠️ DETECTED ${findings.length} HISTORICAL SECRET EXPOSURE(S) IN GIT LOG:\n`);
+    findings.forEach((f, idx) => {
+        console.log(`------------------------------------------------------------`);
+        console.log(`Historical Finding #${idx + 1}: ${f.type}`);
+        console.log(`Commit:      ${f.gitExposure?.introducedCommit?.sha.substring(0, 8)} (${f.gitExposure?.introducedCommit?.date})`);
+        console.log(`Author:      ${f.gitExposure?.introducedCommit?.author}`);
+        console.log(`Secret:      ${f.redactedSecret}`);
+        console.log(`Status:      ${f.gitExposure?.statusDescription}`);
+        console.log(`Risk:        ${f.risk} (Score ${f.riskAssessment.score}/100)`);
+        console.log(`Purge CMD:   ${f.remediation.gitHistoryPurgeCommand}`);
+    });
+    console.log('------------------------------------------------------------\n');
+    process.exit(1);
+}
+async function runTrace(cmdArgs, cwd) {
+    const secret = cmdArgs[0];
+    if (!secret) {
+        console.error('Usage: secret-leak-detector trace <secret-string>');
+        process.exit(1);
+    }
+    console.log(`\n🔍 Tracing provenance and exposure for credential...`);
+    const historyEngine = new gitHistoryEngine_1.GitHistoryEngine(cwd);
+    const exposure = await historyEngine.traceSecret(secret);
+    console.log('\n============================================================');
+    console.log('📊 GIT PROVENANCE & BLAST RADIUS TRACE');
+    console.log('============================================================');
+    console.log(`Status:             ${exposure.statusDescription}`);
+    console.log(`In Active HEAD:     ${exposure.isPresentInHead ? 'YES 🚨' : 'NO (Deleted from HEAD)'}`);
+    console.log(`In Git History:     ${exposure.isPresentInHistory ? 'YES ⚠️ (Must be rotated)' : 'NO'}`);
+    console.log(`Exposure Duration:  ${exposure.exposureDurationDays} days`);
+    console.log(`Exposed Branches:   ${exposure.branches.join(', ')}`);
+    console.log(`Remote Pushed:      ${exposure.isRemote ? 'YES (External exposure!)' : 'Local only'}`);
+    if (exposure.introducedCommit) {
+        console.log(`Introduced By:      ${exposure.introducedCommit.author} <${exposure.introducedCommit.sha.substring(0, 7)}>`);
+        console.log(`Commit Date:        ${exposure.introducedCommit.date}`);
+        console.log(`Commit Message:     "${exposure.introducedCommit.message}"`);
+    }
+    console.log('============================================================\n');
+}
+async function runTimeline(cmdArgs, cwd) {
+    const secret = cmdArgs[0];
+    if (!secret) {
+        console.error('Usage: secret-leak-detector timeline <secret-string>');
+        process.exit(1);
+    }
+    const redacted = (0, redactor_1.redactSecret)(secret);
+    const timelineEngine = new gitTimeline_1.GitTimelineEngine(cwd);
+    const report = await timelineEngine.buildTimeline(secret, redacted);
+    console.log(report.timelineAscii);
+}
+async function runBaseline(cmdArgs, cwd) {
+    const subCommand = cmdArgs[0] || 'init';
+    if (subCommand !== 'init' && subCommand !== 'update') {
+        console.error('Usage: secret-leak-detector baseline [init|update]');
+        process.exit(1);
+    }
+    console.log(`\n📦 Initializing baseline for workspace: ${cwd}`);
+    const files = [];
+    collectFiles(cwd, files, cwd);
+    const findings = [];
+    for (const f of files) {
+        findings.push(...(0, scanner_1.scanFile)(f, { workspaceRoot: cwd }));
+    }
+    const baselineEngine = new baselineEngine_1.BaselineEngine(cwd);
+    const baseline = baselineEngine.saveBaseline(findings);
+    console.log(`✅ Saved ${baseline.findings.length} findings to ${baselineEngine_1.DEFAULT_BASELINE_FILENAME}.`);
+    console.log('Future CI scans will only fail on newly introduced secrets!\n');
+}
+async function runFix(cmdArgs, cwd) {
+    const targetFile = cmdArgs[0];
+    const isDryRun = cmdArgs.includes('--dry-run');
+    if (!targetFile) {
+        console.error('Usage: secret-leak-detector fix <file> [--dry-run]');
+        process.exit(1);
+    }
+    const absPath = path.resolve(cwd, targetFile);
+    const findings = (0, scanner_1.scanFile)(absPath, { workspaceRoot: cwd });
+    if (findings.length === 0) {
+        console.log(`✅ No secrets detected in ${targetFile}.`);
+        process.exit(0);
+    }
+    console.log(`\n🔧 Found ${findings.length} secret(s) in ${targetFile}. Controlled Remediation Plan:\n`);
+    for (const f of findings) {
+        console.log(`--- Finding: ${f.type} (${f.redactedSecret}) ---`);
+        console.log(f.remediation.diffPreview);
+        console.log('');
+        if (!isDryRun) {
+            const result = (0, remediationEngine_1.applyControlledRemediation)(f, cwd);
+            if (result.success) {
+                console.log(`✅ Applied fix: ${result.message}`);
+            }
+            else {
+                console.error(`❌ Failed: ${result.message}`);
+            }
+        }
+    }
+    if (isDryRun) {
+        console.log('ℹ️ Dry-run mode: No files were changed. Omit --dry-run to apply patch.');
+    }
+}
+async function runVerify(cmdArgs, cwd) {
+    const targetFile = cmdArgs[0];
+    if (!targetFile) {
+        console.error('Usage: secret-leak-detector verify <file>');
+        process.exit(1);
+    }
+    const absPath = path.resolve(cwd, targetFile);
+    const currentFindings = (0, scanner_1.scanFile)(absPath, { workspaceRoot: cwd });
+    console.log('\n============================================================');
+    console.log(`🔍 RESCAN VERIFICATION: ${targetFile}`);
+    console.log('============================================================');
+    if (currentFindings.length === 0) {
+        console.log('✅ TARGET FILE VERIFIED CLEAN! No remaining credentials found.');
+    }
+    else {
+        console.log(`❌ REMAINING EXPOSURES: Found ${currentFindings.length} secret(s) still present:`);
+        currentFindings.forEach((f) => {
+            console.log(`  • Line ${f.line}: ${f.type} (${f.redactedSecret})`);
+        });
+    }
+    console.log('============================================================\n');
+}
+async function runHook(cmdArgs, cwd) {
+    const subCommand = cmdArgs[0] || 'install';
+    if (subCommand === 'install') {
+        const gitEngine = new gitHistoryEngine_1.GitHistoryEngine(cwd);
+        if (!(await gitEngine.isGitRepo())) {
+            console.error('Error: Current directory is not a Git repository.');
+            process.exit(1);
+        }
+        const hooksDir = path.join(cwd, '.git', 'hooks');
+        if (!fs.existsSync(hooksDir))
+            fs.mkdirSync(hooksDir, { recursive: true });
+        const hookFile = path.join(hooksDir, 'pre-commit');
+        const hookScript = `#!/bin/sh
+# Secret Leak Detector Pre-Commit Hook
+echo "🔐 [Secret Leak Detector] Inspecting staged changes..."
+npx --no-install secret-leak-detector scan --staged --fail-on CRITICAL
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+  echo ""
+  echo "❌ COMMIT REJECTED: Unredacted credentials found in staged commit!"
+  echo "Run 'npx secret-leak-detector fix <file>' or migrate credentials to .env."
+  exit 1
+fi
+exit 0
+`;
+        fs.writeFileSync(hookFile, hookScript, { mode: 0o755 });
+        console.log(`✅ Pre-commit hook successfully installed to ${hookFile}`);
+    }
+}
+function collectFiles(currentPath, fileList, rootDir) {
+    if (!fs.existsSync(currentPath))
+        return;
+    const stat = fs.statSync(currentPath);
+    if (stat.isFile()) {
+        fileList.push(currentPath);
+        return;
+    }
+    const entries = fs.readdirSync(currentPath);
+    const EXCLUDES = [
+        'node_modules',
+        '.git',
+        'dist',
+        'build',
+        '.next',
+        'coverage',
+        '.vscode',
+    ];
+    for (const entry of entries) {
+        if (EXCLUDES.includes(entry))
+            continue;
+        const full = path.join(currentPath, entry);
+        const s = fs.statSync(full);
+        if (s.isDirectory()) {
+            collectFiles(full, fileList, rootDir);
+        }
+        else if (s.isFile()) {
+            // Exclude binary and lockfiles
+            if (!entry.endsWith('.lock') && !entry.endsWith('.png') && !entry.endsWith('.jpg') && !entry.endsWith('.vsix')) {
+                fileList.push(full);
+            }
+        }
+    }
+}
+main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+});
+//# sourceMappingURL=index.js.map
