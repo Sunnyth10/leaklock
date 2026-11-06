@@ -32,6 +32,12 @@
   "bin": {
     "leaklock": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "media",
+    "README.md",
+    "LICENSE.txt"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
