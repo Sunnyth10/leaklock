@@ -51,7 +51,7 @@ class DashboardPanel {
             DashboardPanel.currentPanel.updateFindings(initialFindings);
             return;
         }
-        const panel = vscode.window.createWebviewPanel(DashboardPanel.viewType, '🔐 Secret Leak Detector Dashboard', column || vscode.ViewColumn.One, {
+        const panel = vscode.window.createWebviewPanel(DashboardPanel.viewType, '🔐 LeakLock Dashboard', column || vscode.ViewColumn.One, {
             enableScripts: true,
             retainContextWhenHidden: true,
             localResourceRoots: [extensionUri],
@@ -68,13 +68,13 @@ class DashboardPanel {
         this._panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'scanWorkspace':
-                    vscode.commands.executeCommand('secret-leak-detector.scanWorkspace');
+                    vscode.commands.executeCommand('leaklock.scanWorkspace');
                     return;
                 case 'scanStaged':
-                    vscode.commands.executeCommand('secret-leak-detector.scanStaged');
+                    vscode.commands.executeCommand('leaklock.scanStaged');
                     return;
                 case 'installHook':
-                    vscode.commands.executeCommand('secret-leak-detector.installGitHook');
+                    vscode.commands.executeCommand('leaklock.installGitHook');
                     return;
                 case 'openFile':
                     if (message.file && message.line) {
@@ -115,7 +115,7 @@ class DashboardPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Secret Leak Detector</title>
+  <title>LeakLock</title>
   <style>
     :root {
       --bg: #0b0f17;
@@ -315,7 +315,7 @@ class DashboardPanel {
 <body>
   <div class="header">
     <div class="title-area">
-      <h1>🔐 Secret Leak Detector</h1>
+      <h1>🔐 LeakLock</h1>
       <span class="badge-live">LIVE MONITORING</span>
     </div>
     <div class="btn-group">

@@ -1,14 +1,14 @@
 {
-  "name": "secret-leak-detector",
-  "displayName": "Secret Leak Detector",
+  "name": "leaklock",
+  "displayName": "LeakLock",
   "description": "Developer-first credential protection. Detect, trace, block, and fix secret leaks before they leave your machine.",
-  "version": "1.0.2",
-  "publisher": "MokuLakshithReddy",
+  "version": "1.0.0",
+  "publisher": "Sunnyth",
   "icon": "media/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MokuLakshithReddy/Secret_Leak_Detector.git"
+    "url": "https://github.com/Sunnyth10/leaklock.git"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -19,6 +19,7 @@
     "Other"
   ],
   "keywords": [
+    "leaklock",
     "secret",
     "security",
     "git",
@@ -29,7 +30,7 @@
   ],
   "main": "./dist/extension.js",
   "bin": {
-    "secret-leak-detector": "./dist/cli.js"
+    "leaklock": "./dist/cli.js"
   },
   "activationEvents": [
     "onStartupFinished"
@@ -37,43 +38,43 @@
   "contributes": {
     "commands": [
       {
-        "command": "secret-leak-detector.scanWorkspace",
-        "title": "Secret Leak Detector: Scan Workspace for Secrets",
+        "command": "leaklock.scanWorkspace",
+        "title": "LeakLock: Scan Workspace for Secrets",
         "category": "Security",
         "icon": "$(search)"
       },
       {
-        "command": "secret-leak-detector.scanStaged",
-        "title": "Secret Leak Detector: Scan Git Staged Changes",
+        "command": "leaklock.scanStaged",
+        "title": "LeakLock: Scan Git Staged Changes",
         "category": "Security",
         "icon": "$(git-commit)"
       },
       {
-        "command": "secret-leak-detector.openDashboard",
-        "title": "Secret Leak Detector: Open Security Dashboard",
+        "command": "leaklock.openDashboard",
+        "title": "LeakLock: Open Security Dashboard",
         "category": "Security",
         "icon": "$(shield)"
       },
       {
-        "command": "secret-leak-detector.installGitHook",
-        "title": "Secret Leak Detector: Install Git Pre-Commit Hook",
+        "command": "leaklock.installGitHook",
+        "title": "LeakLock: Install Git Pre-Commit Hook",
         "category": "Security",
         "icon": "$(check)"
       },
       {
-        "command": "secret-leak-detector.uninstallGitHook",
-        "title": "Secret Leak Detector: Uninstall Git Pre-Commit Hook",
+        "command": "leaklock.uninstallGitHook",
+        "title": "LeakLock: Uninstall Git Pre-Commit Hook",
         "category": "Security",
         "icon": "$(trash)"
       },
       {
-        "command": "secret-leak-detector.ignoreFinding",
-        "title": "Secret Leak Detector: Ignore Finding as False Positive",
+        "command": "leaklock.ignoreFinding",
+        "title": "LeakLock: Ignore Finding as False Positive",
         "category": "Security"
       },
       {
-        "command": "secret-leak-detector.clearFindings",
-        "title": "Secret Leak Detector: Clear Findings",
+        "command": "leaklock.clearFindings",
+        "title": "LeakLock: Clear Findings",
         "category": "Security",
         "icon": "$(clear-all)"
       }
@@ -81,20 +82,20 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "secret-leak-detector-sidebar",
-          "title": "Secret Leak Detector",
+          "id": "leaklock-sidebar",
+          "title": "LeakLock",
           "icon": "media/shield.svg"
         }
       ]
     },
     "views": {
-      "secret-leak-detector-sidebar": [
+      "leaklock-sidebar": [
         {
-          "id": "secret-leak-detector.findingsView",
+          "id": "leaklock.findingsView",
           "name": "Active Leaks & Findings"
         },
         {
-          "id": "secret-leak-detector.overviewView",
+          "id": "leaklock.overviewView",
           "name": "Security Overview"
         }
       ]
@@ -102,46 +103,46 @@
     "menus": {
       "view/title": [
         {
-          "command": "secret-leak-detector.scanWorkspace",
-          "when": "view == secret-leak-detector.findingsView",
+          "command": "leaklock.scanWorkspace",
+          "when": "view == leaklock.findingsView",
           "group": "navigation@1"
         },
         {
-          "command": "secret-leak-detector.openDashboard",
-          "when": "view == secret-leak-detector.findingsView",
+          "command": "leaklock.openDashboard",
+          "when": "view == leaklock.findingsView",
           "group": "navigation@2"
         },
         {
-          "command": "secret-leak-detector.clearFindings",
-          "when": "view == secret-leak-detector.findingsView",
+          "command": "leaklock.clearFindings",
+          "when": "view == leaklock.findingsView",
           "group": "navigation@3"
         }
       ]
     },
     "configuration": {
-      "title": "Secret Leak Detector",
+      "title": "LeakLock",
       "properties": {
-        "secretLeakDetector.enableRealtimeScanning": {
+        "leaklock.enableRealtimeScanning": {
           "type": "boolean",
           "default": true,
           "description": "Automatically scan open documents on save or change."
         },
-        "secretLeakDetector.blockGitCommits": {
+        "leaklock.blockGitCommits": {
           "type": "boolean",
           "default": true,
           "description": "Intercept commits and block them if unredacted credentials are staged."
         },
-        "secretLeakDetector.minEntropy": {
+        "leaklock.minEntropy": {
           "type": "number",
           "default": 3.4,
           "description": "Minimum Shannon entropy threshold for generic secret detection."
         },
-        "secretLeakDetector.redactSecrets": {
+        "leaklock.redactSecrets": {
           "type": "boolean",
           "default": true,
           "description": "Mask credential values in the UI and terminal to avoid secondary leaks."
         },
-        "secretLeakDetector.excludeGlobs": {
+        "leaklock.excludeGlobs": {
           "type": "array",
           "items": {
             "type": "string"

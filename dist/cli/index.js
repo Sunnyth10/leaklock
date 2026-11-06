@@ -80,10 +80,10 @@ async function main() {
 }
 function printHelp() {
     console.log(`
-🔐 Secret Leak Detector CLI — Context-Aware Secret Protection & History Analysis
+🔐 LeakLock CLI — Context-Aware Secret Protection & History Analysis
 
 Usage:
-  secret-leak-detector <command> [options]
+  leaklock <command> [options]
 
 Commands:
   scan [target]          Scan working tree or file for exposed credentials
@@ -111,10 +111,10 @@ Commands:
   hook install           Install standalone pre-commit hook in .git/hooks/pre-commit
 
 Examples:
-  npx secret-leak-detector scan . --sarif > results.sarif
-  npx secret-leak-detector scan --staged
-  npx secret-leak-detector history --max 50
-  npx secret-leak-detector baseline init
+  npx leaklock scan . --sarif > results.sarif
+  npx leaklock scan --staged
+  npx leaklock history --max 50
+  npx leaklock baseline init
 `);
 }
 async function runScan(cmdArgs, cwd) {
@@ -284,7 +284,7 @@ async function runHistory(cmdArgs, cwd) {
 async function runTrace(cmdArgs, cwd) {
     const secret = cmdArgs[0];
     if (!secret) {
-        console.error('Usage: secret-leak-detector trace <secret-string>');
+        console.error('Usage: leaklock trace <secret-string>');
         process.exit(1);
     }
     console.log(`\n🔍 Tracing provenance and exposure for credential...`);
@@ -309,7 +309,7 @@ async function runTrace(cmdArgs, cwd) {
 async function runTimeline(cmdArgs, cwd) {
     const secret = cmdArgs[0];
     if (!secret) {
-        console.error('Usage: secret-leak-detector timeline <secret-string>');
+        console.error('Usage: leaklock timeline <secret-string>');
         process.exit(1);
     }
     const redacted = (0, redactor_1.redactSecret)(secret);
@@ -320,7 +320,7 @@ async function runTimeline(cmdArgs, cwd) {
 async function runBaseline(cmdArgs, cwd) {
     const subCommand = cmdArgs[0] || 'init';
     if (subCommand !== 'init' && subCommand !== 'update') {
-        console.error('Usage: secret-leak-detector baseline [init|update]');
+        console.error('Usage: leaklock baseline [init|update]');
         process.exit(1);
     }
     console.log(`\n📦 Initializing baseline for workspace: ${cwd}`);
@@ -339,7 +339,7 @@ async function runFix(cmdArgs, cwd) {
     const targetFile = cmdArgs[0];
     const isDryRun = cmdArgs.includes('--dry-run');
     if (!targetFile) {
-        console.error('Usage: secret-leak-detector fix <file> [--dry-run]');
+        console.error('Usage: leaklock fix <file> [--dry-run]');
         process.exit(1);
     }
     const absPath = path.resolve(cwd, targetFile);
@@ -370,7 +370,7 @@ async function runFix(cmdArgs, cwd) {
 async function runVerify(cmdArgs, cwd) {
     const targetFile = cmdArgs[0];
     if (!targetFile) {
-        console.error('Usage: secret-leak-detector verify <file>');
+        console.error('Usage: leaklock verify <file>');
         process.exit(1);
     }
     const absPath = path.resolve(cwd, targetFile);
@@ -402,14 +402,14 @@ async function runHook(cmdArgs, cwd) {
             fs.mkdirSync(hooksDir, { recursive: true });
         const hookFile = path.join(hooksDir, 'pre-commit');
         const hookScript = `#!/bin/sh
-# Secret Leak Detector Pre-Commit Hook
-echo "🔐 [Secret Leak Detector] Inspecting staged changes..."
-npx --no-install secret-leak-detector scan --staged --fail-on CRITICAL
+# LeakLock Pre-Commit Hook
+echo "🔐 [LeakLock] Inspecting staged changes..."
+npx --no-install leaklock scan --staged --fail-on CRITICAL
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
   echo ""
   echo "❌ COMMIT REJECTED: Unredacted credentials found in staged commit!"
-  echo "Run 'npx secret-leak-detector fix <file>' or migrate credentials to .env."
+  echo "Run 'npx leaklock fix <file>' or migrate credentials to .env."
   exit 1
 fi
 exit 0
