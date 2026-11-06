@@ -1,5 +1,5 @@
 {
-  "name": "leaklock",
+  "name": "leaklock-security",
   "displayName": "LeakLock",
   "description": "Developer-first credential protection. Detect, trace, block, and fix secret leaks before they leave your machine.",
   "version": "1.0.0",
